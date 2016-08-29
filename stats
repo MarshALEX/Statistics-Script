@@ -1,0 +1,186 @@
+#!/bin/bash
+#
+#
+#Alex Marsh
+#CS344 Program1
+#October 11, 2015
+#This shell script takes in a file and gives
+# the average and median of rows and columns
+# from an input file. This file also verifies 
+#parameters
+
+#if number of arguments are less than 1 throw an error
+#our assignment is either 3 or 2 arguments
+ if [ "$#" -lt 1 ]
+ then
+ echo "Usage: stats {-rows|-cols} [file]" 1>&2
+ exit 1
+ fi
+
+ #if number of arguments more than 2 throw error
+#our assignment is either 3 or 2
+if [ "$#" -gt 2 ]
+ then
+ echo "Usage: stats {-rows|-cols} [file]" 1>&2
+ exit 1
+ fi
+
+#check to see that user speecified rows (-r) or columns (-c)
+#we check the 2nd digit of the first parameter 
+#throw error if user doesn't enter -r or -c
+if [ "${1:0:2}" != '-r' ] && [ "${1:0:2}" != '-c' ]
+ then
+ echo "Usage: stats {-rows|-cols} [file]" >&2
+ exit 1
+ fi
+
+#create a tempfile using the process id for unique name
+#then if we run this program more than once we will not have duplicates
+tempfilePID=$$temp
+
+#trap command to catch interrup, hangup, or terminate signals from errors
+trap "echo ITSATRAP; rm -f $tempfilePID $tempCol$$ $newTempRow$$; exit 1" INT HUP TERM 
+
+#test positional parameters
+#we need two parameters
+if [[ "$#" -eq 2 ]]
+then
+  #if positional parameter isn't readable
+  if [ ! -r "$2" ]
+  then
+	#exit with error message
+	echo "can't open the file"
+	echo "stats: cannot read $2" 1>&2
+	exit 1
+  fi
+fi
+
+#test if we only have 1 positional parameter
+if [ "$#" -eq 1 ]
+then
+    cat > $tempfilePID
+
+else
+ #if the file isn't $1 it must be $2
+ #above code has cases for no parameters and
+ #more than two parameters
+  cat $2 > $tempfilePID
+
+fi
+
+#if the user specifies rows
+if [[ "${1:0:2}" == '-r' ]]
+then
+  echo "Average   Median"
+
+#read in a line from tempfile	
+  while read myLine  
+  do
+	sum=0
+	count=0
+	#create an array
+	num=( $myLine )
+
+	#move through array/row and sum numbers
+	for i in "${num[@]}"
+	do
+	  sum=`expr $sum + $i`
+	  count=`expr $count + 1`	
+	  
+	  #find the average	
+	  average=$((( $sum + ( $count/2 ) )/$count)) 
+
+	  #this eexpression was found on stackexchange.com
+	  #http://unix.stackexchange.com/questions/195744/
+	  #how-can-i-get-this-array-of-numbers-sorted  
+	  #it sorts the array so we can find the middle
+	  sortedNum=( $( printf "%s\n" " ${num[@]}" | sort -n) )
+	  mid=`expr $count/2`
+	done
+	  #finding median
+	  if(($count % 2 == 0)) #even number of numbers 
+	  then
+	     ((median=(sortedNum[mid] + sortedCol[mid - 1])/2)) 
+	  else 	
+	     ((median=sortedNum[mid]))
+	  fi
+	#display average and median for row
+	echo "$average           $median" 
+ 
+ done < $tempfilePID 
+
+#ifthe user specifies columsn
+elif [[ "${1:0:2}" == '-c' ]]
+then
+	#find number of column by counting the variables in the first line 
+	countC=$(head -n 1 $tempfilePID | wc -w)
+
+	#go through temp file
+	for(( i=1 ; i <= $countC ; i++))
+	do
+	  #cut the column specified by i
+	  cut -f $i  $tempfilePID > tempCol$$
+
+	  #turn column into a row and store it in a tempfile
+	  cat tempCol$$ | tr '\n' '\t' > "$newTempRow$$"
+
+	  #add for easy in printing 
+	  echo -e "" >> "$newTempRow$$" 
+
+	  #read a line from tempfile
+	  while read myRow
+	   do
+		colSum=0
+
+		#store line/row in an array
+		colNum=( $myRow )
+		colCount=0
+		
+		#loop through array to find the average and median
+		for x in "${colNum[@]}"
+		do
+		  colSum=`expr $colSum + $x`
+		  colCount=`expr $colCount + 1`
+		
+		  #find average 
+		  colAverage=$((($colSum + $colCount/2)/$colCount))
+		  
+		  #this eexpression was found on stackexchange.com
+	  	  #http://unix.stackexchange.com/questions/195744/
+	  	  #how-can-i-get-this-array-of-numbers-sorted
+		  #sort array to find the median  
+	  	  sortedCol=( $( printf "%s\n" "${colNum[@]}" | sort -n) )
+		  colMid=`expr $colCount/2`
+		 done
+
+		 #find median
+		 if(($colCount % 2 == 0)) #even number of numbers 
+	          then
+	 	     ((colMedian=(sortedCol[colMid] + sortedCol[colMid - 1])/2))
+	          else 	
+	             ((colMedian=sortedCol[colMid]))
+	          fi		
+	       
+		#add average and median to arrays
+		colAvArray[i]=$colAverage
+	       colMedArray[i]=$colMedian
+	 done < $newTempRow$$	 	
+   done 
+
+	#display array with median and average
+	echo "Average:"
+	echo ${colAvArray[@]:1}
+	echo "Median:"
+	echo ${colMedArray[@]:1}
+
+else
+   #print error message
+   echo "Not -r or -c"
+   echo "Usage: stats {-rows\-cols} [file]" 1>&2		
+   exit 1
+fi  
+
+#remove temp file
+rm -f $tempfilePID tempCol$$ $newTempRow$$
+
+
